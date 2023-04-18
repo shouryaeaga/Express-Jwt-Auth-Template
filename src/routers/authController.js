@@ -46,7 +46,7 @@ router.post("/login", async (req, res) => {
         if (results.rows[0].active == false) {
             return res.send("You are not an active user")
         }
-
+        
         result = await bcrypt.compare(password, results.rows[0].password)
 
         if (result) {
