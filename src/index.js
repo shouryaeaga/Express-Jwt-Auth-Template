@@ -6,7 +6,7 @@ const loggingMiddleware = require("./middleware/loggingMiddleware")
 require('dotenv').config()
 
 // Controllers
-const authController = require("./routers/authController")
+const authController = require("./routers/authRouter")
 
 app.use(express.json())
 app.use(cookieParser())
