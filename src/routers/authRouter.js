@@ -3,6 +3,9 @@ const pool = require("../database/db")
 const bcrypt = require("bcrypt")
 const jwt = require("jsonwebtoken")
 
+/*
+    Signup endpoint
+*/
 router.post("/register", async (req, res) => {
     const {username, email, password, is_super_user, active} = req.body
     
@@ -31,23 +34,22 @@ router.post("/login", async (req, res) => {
     }
     console.log(`${username} is trying to login`)
 
-    
-
     user = pool.query('SELECT * FROM users WHERE username = $1;', [username], async (error, results) => {
         if (error) {
             console.log(error)
             return res.status(401).json({error: error})
         }
 
+        // FYI: hashing happens before checking if user exists to stop attackers from doing a timing attack
+        result = await bcrypt.compare(password, results.rows[0].password)
+
         if (results.rowCount == 0) {
-            return res.send(`User ${username} does not exist`)
+            return res.send(`Invalid credentials`)
         }
 
         if (results.rows[0].active == false) {
             return res.send("You are not an active user")
         }
-        
-        result = await bcrypt.compare(password, results.rows[0].password)
 
         if (result) {
             const access_token = jwt.sign({sub: username, type: 'access'}, process.env.ACCESS_JWT_SECRET_KEY, {expiresIn: '15m'})
@@ -65,11 +67,14 @@ router.post("/login", async (req, res) => {
             })
             
         } else {
-            return res.send("You are not logged in")
+            return res.send("Invalid credentials")
         }
     })
 })
 
+/*
+    Refresh token endpoint
+*/
 router.get("/refresh_tokens", async (req, res) => {
     const refresh_token = req.cookies.refresh_token
     try {
