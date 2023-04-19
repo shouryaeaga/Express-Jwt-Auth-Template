@@ -2,12 +2,17 @@ const router = require("express").Router()
 const pool = require("../database/db")
 const bcrypt = require("bcrypt")
 const jwt = require("jsonwebtoken")
+const crypto = require("crypto")
+const sendEmail=require("../utils/sendEmail")
 
 /*
     Signup endpoint
 */
 router.post("/register", async (req, res) => {
-    const {username, email, password, is_super_user, active} = req.body
+    const {username, email, password, active} = req.body
+    if (!username || !email || !password || !active) {
+        return res.status(400).send("Must send a json body with username, email, password and whether they are active")
+    }
     
     const hash = await bcrypt.hash(password, 10)
 
@@ -77,6 +82,10 @@ router.post("/login", async (req, res) => {
 */
 router.get("/refresh_tokens", async (req, res) => {
     const refresh_token = req.cookies.refresh_token
+    if (!refresh_token) {
+        res.status(400).send("Must send a refresh token in cookies")
+    }
+
     try {
         pool.query("SELECT * FROM users WHERE refresh_token=$1", [refresh_token], (error, results) => {
             if (error) {
@@ -113,12 +122,68 @@ router.get("/refresh_tokens", async (req, res) => {
                 res.send("Invalid refresh token")
             }
         })
-
-        
     } catch (error) {
         console.log(error)
         return res.status(401).send("Not authorized")
     }
+})
+
+router.post("/forgot_password", (req, res) => {
+    const {email} = req.body
+
+    if (!email) {
+        return res.status(400).send("Must send an email key in json")
+    }
+
+    pool.query("SELECT * FROM users WHERE email=$1", [email], (error, results) => {
+        if (error) {
+            console.log(error)
+            return res.status(500).send(error)
+        }
+        if (results.rowCount === 0) {
+            return res.status(404).send("User with email not found")
+        }
+        const user_id = results.rows[0].id
+        const token = crypto.randomBytes(32).toString("hex")
+        pool.query("INSERT INTO password_tokens (user_id, token) VALUES ($1, $2) RETURNING *", [user_id, token], (error, results) => {
+            if (error) {
+                console.log(error)
+                return res.status(500).send(error)
+            }
+            const link = `${process.env.BASE_URL}/auth/forgot_password/${user_id}/${token}`
+            sendEmail(email, "Password reset", link)
+            return res.send("Email sent")
+        })
+    })
+})
+
+router.post("/forgot_password/:user_id/:token", async (req, res) => {
+    if (!req.body.password) {
+        return res.status(400).send("Invalid body for request")
+    }
+    pool.query("SELECT * FROM users WHERE id=$1", [req.params.user_id], async (error, results) => {
+        if (error) {
+            return res.status(500).send(error)
+        }
+        if (results.rowCount === 0) {
+            return res.status(404).send("Invalid or expired link")
+        }
+        pool.query("SELECT * FROM password_tokens WHERE user_id=$1", [results.rows[0].id], async (error, results) => {
+            if (error) {
+                return res.status(500).send(error)
+            }
+            if (results.rowCount === 0) {
+                return res.status(404).send("Invalid or expired link")
+            }
+            hashed_password = await bcrypt.hash(req.body.password, 10)
+            pool.query("UPDATE users SET password=$1 WHERE id=$2", [hashed_password, req.params.user_id], (error, results) => {
+                if (error) {
+                    return res.status(500).send(error)
+                }
+                return res.send("Password changed")
+            })
+        })
+    })
 })
 
 module.exports = router
