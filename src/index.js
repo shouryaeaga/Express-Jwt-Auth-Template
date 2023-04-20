@@ -18,4 +18,4 @@ app.get("/", authMiddleware, (req, res) => {
     res.send("Super secret")
 })
 
-app.listen(process.env.PORT, () => console.log(`Server listening on\x1b[31m PORT: ${process.env.PORT}`))
+app.listen(process.env.PORT, () => console.log(`Server listening on\x1b[31m PORT: ${process.env.PORT} \x1b[0m`))
